@@ -1,0 +1,26 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+flask = "==2.1.2"
+requests = "*"
+flask-cors = "*"
+python-dotenv = "*"
+pymongo = {extras = ["srv"], version = "*"}
+flask-mongoengine = "*"
+wheel = "*"
+flask-jwt-extended = "*"
+black = "*"
+flask-mail = "*"
+itsdangerous = "*"
+waitress = "*"
+
+[dev-packages]
+black = "*"
+pylint = "*"
+pycodestyle = "*"
+
+[requires]
+python_version = "3.10"
