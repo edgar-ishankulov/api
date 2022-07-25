@@ -1,18 +1,16 @@
-import email
 import os
 import json
 import bcrypt
 from dotenv import load_dotenv
 import requests
 from flask_cors import CORS
-from flask import Flask, jsonify, request, url_for, redirect
+from flask import Flask, jsonify, request, url_for, redirect, Blueprint
 from datetime import datetime, timedelta, timezone
 from flask_jwt_extended import (
     create_access_token,
     get_jwt,
     get_jwt_identity,
     unset_jwt_cookies,
-    jwt_required,
     JWTManager,
 )
 import pymongo
@@ -20,6 +18,8 @@ from pymongo import MongoClient
 from bson.json_util import dumps
 from flask_mail import Mail, Message
 from itsdangerous import SignatureExpired, URLSafeTimedSerializer
+from new_image import new_image_blueprint
+from crud_operations import crud_operations_blueprint
 
 load_dotenv(dotenv_path="./.env.local")
 
@@ -28,7 +28,7 @@ UNSPLASH_URL = "https://api.unsplash.com/photos/random/"
 FRONTEND_HOST = os.environ.get("FRONTEND_HOST")
 DB_HOST = os.environ.get("DB_HOST")
 UNSPLASH_KEY = os.environ.get("UNSPLASH_KEY", "")
-# DEBUG = bool(os.environ.get("DEBUG", True))
+DEBUG = bool(os.environ.get("DEBUG", True))
 client = pymongo.MongoClient(DB_HOST)
 
 if not UNSPLASH_KEY:
@@ -37,9 +37,13 @@ if not UNSPLASH_KEY:
     )
 
 app = Flask(__name__)
+
+app.register_blueprint(new_image_blueprint, url_prefix="")
+app.register_blueprint(crud_operations_blueprint, url_prefix="")
+
 CORS(app)
 serializer = URLSafeTimedSerializer("SecretKey")
-# app.config["DEBUG"] = DEBUG
+app.config["DEBUG"] = DEBUG
 app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY")
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=12)
 
@@ -50,63 +54,11 @@ app.config["MAIL_USE_TLS"] = False
 app.config["MAIL_USERNAME"] = os.environ.get("MAIL_USERNAME")
 app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD")
 
+
+
+# Token Management
+
 jwt = JWTManager(app)
-
-
-@app.route("/test")
-def test():
-    return "Hello", 200
-
-@app.route("/new-image")
-def new_image():
-    word = request.args.get("query")
-    headers = {"Authorization": "Client-ID " + UNSPLASH_KEY, "Accept-Version": "v1"}
-    params = {"query": word, "count": 30}
-    response = requests.get(url=UNSPLASH_URL, headers=headers, params=params)
-    data = response.json()
-    resultsArray = list(data)
-    print(resultsArray)
-    print(len(resultsArray))
-    if len(resultsArray) < 2:
-        return 'No valid results', 400
-    return dumps(data), 200
-
-@app.route("/images", methods=["GET", "POST", "DELETE"])
-@jwt_required()
-
-def images():
-
-    if request.method == "GET":
-        db = client["images-db"]
-        usersCollection = db["users"]
-        identity = get_jwt_identity()
-        userImages = dumps(usersCollection.find({"email": identity}, {"images": 1, "_id": 0} ))
-        return userImages
-
-    if request.method == "POST":
-        db = client["images-db"]
-        usersCollection = db["users"]
-        identity = get_jwt_identity()
-        alreadySaved = False
-        img = request.get_json()
-        imgId = img['id']
-        userImages = list(usersCollection.find({'$and': [ {"email":identity}, {"images.id": imgId} ]}, {"images.id":1}))
-        if (len(userImages) == 0):
-            usersCollection.update_one({"email": identity}, { "$push": {'images': img} })
-            alreadySaved = "False"
-            return alreadySaved, 201
-        if (len(userImages)>0):
-            alreadySaved = "True"
-            return alreadySaved, 202
-
-    if request.method == "DELETE":
-        db = client["images-db"]
-        usersCollection = db["users"]
-        identity = get_jwt_identity()
-        img = request.get_json()
-        usersCollection.update_one({"email": identity}, { "$pull": {'images': img} })
-        return "Image Deleted"
-
 @app.after_request
 def refresh_expiring_jwts(response):
     try:
